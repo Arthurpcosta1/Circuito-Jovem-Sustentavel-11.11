@@ -249,8 +249,7 @@ export function MissionsAchievements() {
                     <div className="flex-1">
                       <div className="flex items-start justify-between gap-2 mb-2">
                         <h3 className="text-white text-sm">{mission.title}</h3>
-                        <Badge className={`${getMissionTypeColor(mission.type)} text-xs`}>
-                          {getMissionTypeLabel(mission.type)}
+<Badge className={`${getMissionTypeColor(mission.type)} text-xs`}>                          {getMissionTypeLabel(mission.type)}
                         </Badge>
                       </div>
                       <p className="text-xs text-purple-300 mb-3">{mission.description}</p>
