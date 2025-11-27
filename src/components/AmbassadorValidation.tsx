@@ -60,36 +60,76 @@ export function AmbassadorValidation() {
     setScanMode(true);
     
     try {
-      // Pedir permissão para câmera
-      const stream = await navigator.mediaDevices.getUserMedia({ 
+      // Verificar se getUserMedia está disponível
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('NotSupported');
+      }
+
+      // Pedir permissão para câmera com configurações otimizadas para mobile
+      const constraints = {
         video: { 
-          facingMode: 'environment', // Usar câmera traseira em dispositivos móveis
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
-        } 
-      });
+          facingMode: { ideal: 'environment' }, // Preferir câmera traseira
+          width: { ideal: 1280, max: 1920 },
+          height: { ideal: 720, max: 1080 }
+        },
+        audio: false
+      };
+
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
       
       setCameraStream(stream);
       
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        videoRef.current.play();
         
-        // Começar a escanear após o vídeo estar pronto
-        videoRef.current.onloadedmetadata = () => {
-          startScanning();
-        };
+        // Garantir que o vídeo vai reproduzir
+        videoRef.current.setAttribute('playsinline', 'true');
+        videoRef.current.setAttribute('autoplay', 'true');
+        videoRef.current.muted = true;
+        
+        // Tentar reproduzir o vídeo
+        const playPromise = videoRef.current.play();
+        
+        if (playPromise !== undefined) {
+          playPromise
+            .then(() => {
+              console.log('✅ Câmera iniciada com sucesso');
+              // Começar a escanear após o vídeo estar pronto
+              videoRef.current!.onloadedmetadata = () => {
+                startScanning();
+              };
+            })
+            .catch((error) => {
+              console.error('Erro ao reproduzir vídeo:', error);
+              throw new Error('PlayError');
+            });
+        }
       }
     } catch (error: any) {
       console.error('Erro ao acessar câmera:', error);
-      if (error.name === 'NotAllowedError') {
-        setCameraError('⚠️ Permissão de câmera negada.\n\n📱 Como permitir:\n\n1. Clique no ícone 🔒 ou ⓘ na barra de endereços (ao lado da URL)\n\n2. Procure por "Câmera" e mude para "Permitir"\n\n3. Recarregue esta página\n\nOu use o código manual abaixo! 👇');
-      } else if (error.name === 'NotFoundError') {
-        setCameraError('Nenhuma câmera encontrada no dispositivo. Use o código manual abaixo.');
-      } else {
-        setCameraError('Erro ao acessar a câmera. Use o código manual abaixo.');
+      
+      // Parar qualquer stream que possa ter sido iniciado
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(track => track.stop());
+        setCameraStream(null);
       }
+      
+      if (error.name === 'NotAllowedError' || error.message === 'Permission denied') {
+        setCameraError('⚠️ Permissão de câmera negada.\n\n📱 Como permitir:\n\n1. Clique no ícone 🔒 ou ⓘ na barra de endereços\n2. Procure por "Câmera" e mude para "Permitir"\n3. Recarregue esta página\n\n💡 Ou use o código manual abaixo!');
+      } else if (error.name === 'NotFoundError') {
+        setCameraError('📷 Nenhuma câmera encontrada.\n\nVerifique se seu dispositivo possui uma câmera e se ela não está sendo usada por outro aplicativo.\n\n💡 Use o código manual abaixo!');
+      } else if (error.name === 'NotReadableError') {
+        setCameraError('⚠️ Câmera em uso por outro aplicativo.\n\nFeche outros aplicativos que possam estar usando a câmera.\n\n💡 Use o código manual abaixo!');
+      } else if (error.message === 'NotSupported') {
+        setCameraError('⚠️ Navegador não suporta câmera.\n\n💡 Use o código manual abaixo para continuar!');
+      } else if (error.message === 'PlayError') {
+        setCameraError('⚠️ Erro ao iniciar câmera.\n\nTente novamente ou use o código manual abaixo!');
+      } else {
+        setCameraError('⚠️ Erro ao acessar câmera.\n\n💡 Use o código manual abaixo para continuar!');
+      }
+      
       setScanMode(false);
+      toast.error('Não foi possível acessar a câmera. Use o código manual!');
     }
   };
 

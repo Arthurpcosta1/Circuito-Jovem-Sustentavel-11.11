@@ -32,7 +32,7 @@ export function ShareMenu({ isOpen, onClose }: ShareMenuProps) {
   const [selectedAchievement, setSelectedAchievement] = useState<string | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
 
-  const appLink = 'https://circuitojovemsustentavel.app/download';
+  const appLink = 'https://circuito-jovem-sustentavel-11-11.vercel.app/';
   
   const achievements: Achievement[] = [
     {
@@ -152,7 +152,8 @@ export function ShareMenu({ isOpen, onClose }: ShareMenuProps) {
         </DialogHeader>
 
         <div className="space-y-6 mt-4">
-          {/* Share Achievements Section */}
+          {/* Share Achievements Section - TEMPORARIAMENTE DESABILITADO (aguardando conquistas reais) */}
+          {false && (
           <div>
             <div className="flex items-center gap-2 mb-3">
               <Award className="w-5 h-5 text-purple-400" />
@@ -232,8 +233,9 @@ export function ShareMenu({ isOpen, onClose }: ShareMenuProps) {
               </div>
             )}
           </div>
+          )}
 
-          <Separator className="bg-purple-300/20" />
+          {false && <Separator className="bg-purple-300/20" />}
 
           {/* Share App Link Section */}
           <div>

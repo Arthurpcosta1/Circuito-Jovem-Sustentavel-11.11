@@ -58,19 +58,68 @@ export function CommerceValidator() {
   const startCamera = async () => {
     try {
       setCameraError('');
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: 'environment' } 
-      });
+      
+      // Verificar se getUserMedia está disponível
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('NotSupported');
+      }
+
+      // Configurações otimizadas para mobile
+      const constraints = {
+        video: { 
+          facingMode: { ideal: 'environment' },
+          width: { ideal: 1280, max: 1920 },
+          height: { ideal: 720, max: 1080 }
+        },
+        audio: false
+      };
+
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
       
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         streamRef.current = stream;
-        videoRef.current.play();
-        scanQRCode();
+        
+        // Garantir reprodução em mobile
+        videoRef.current.setAttribute('playsinline', 'true');
+        videoRef.current.setAttribute('autoplay', 'true');
+        videoRef.current.muted = true;
+        
+        const playPromise = videoRef.current.play();
+        
+        if (playPromise !== undefined) {
+          playPromise
+            .then(() => {
+              console.log('✅ Câmera do comércio iniciada');
+              scanQRCode();
+            })
+            .catch((error) => {
+              console.error('Erro ao reproduzir vídeo:', error);
+              throw new Error('PlayError');
+            });
+        }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao acessar câmera:', error);
-      setCameraError('Não foi possível acessar a câmera. Verifique as permissões do navegador.');
+      
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+      }
+      
+      if (error.name === 'NotAllowedError' || error.message === 'Permission denied') {
+        setCameraError('⚠️ Permissão de câmera negada.\n\nPor favor, permita o acesso à câmera nas configurações do navegador.\n\nOu use o código manual abaixo!');
+      } else if (error.name === 'NotFoundError') {
+        setCameraError('📷 Nenhuma câmera encontrada.\n\nUse o código manual abaixo!');
+      } else if (error.name === 'NotReadableError') {
+        setCameraError('⚠️ Câmera em uso.\n\nFeche outros aplicativos e tente novamente.\n\nOu use o código manual abaixo!');
+      } else if (error.message === 'NotSupported') {
+        setCameraError('⚠️ Navegador não suporta câmera.\n\nUse o código manual abaixo!');
+      } else {
+        setCameraError('⚠️ Erro ao acessar câmera.\n\nUse o código manual abaixo!');
+      }
+      
+      setScanMode(false);
     }
   };
 

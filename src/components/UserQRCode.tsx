@@ -82,43 +82,29 @@ export function UserQRCode() {
   };
 
   const createQRCode = async (token: string) => {
-    // Carregar biblioteca QRCode.js dinamicamente
-    if (!(window as any).QRCode) {
-      const script = document.createElement('script');
-      script.src = 'https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js';
-      
-      await new Promise<void>((resolve, reject) => {
-        script.onload = () => resolve();
-        script.onerror = () => reject(new Error('Erro ao carregar biblioteca QR Code'));
-        document.head.appendChild(script);
+    // Usar biblioteca qrcode (melhor e mais confiável)
+    const QRCode = await import('qrcode');
+    
+    try {
+      // Gerar QR code como Data URL
+      const qrDataUrl = await QRCode.toDataURL(token, {
+        width: 256,
+        margin: 2,
+        color: {
+          dark: '#1f2937',
+          light: '#ffffff'
+        },
+        errorCorrectionLevel: 'H'
       });
+      
+      // Setar a imagem no state (React vai renderizar automaticamente)
+      setQrCodeDataUrl(qrDataUrl);
+      
+      console.log('✅ QR Code gerado com sucesso!');
+    } catch (error) {
+      console.error('Erro ao criar QR Code:', error);
+      throw new Error('Erro ao gerar imagem do QR Code');
     }
-
-    const container = document.getElementById('qrcode-container');
-    if (!container) return;
-
-    // Limpar container anterior
-    container.innerHTML = '';
-
-    // Criar QR code com o token seguro
-    const QRCode = (window as any).QRCode;
-    const qr = new QRCode(container, {
-      text: token,
-      width: 256,
-      height: 256,
-      colorDark: '#1f2937',
-      colorLight: '#ffffff',
-      correctLevel: QRCode.CorrectLevel.H
-    });
-
-    // Aguardar geração e capturar como imagem
-    setTimeout(() => {
-      const canvas = container.querySelector('canvas');
-      if (canvas) {
-        const dataUrl = canvas.toDataURL('image/png');
-        setQrCodeDataUrl(dataUrl);
-      }
-    }, 100);
   };
 
   const downloadQRCode = () => {
@@ -221,10 +207,19 @@ export function UserQRCode() {
           <>
             {/* QR Code */}
             <div className="bg-white rounded-2xl p-6 mb-5 shadow-lg">
-              <div 
-                id="qrcode-container" 
-                className="flex items-center justify-center"
-              />
+              <div className="flex items-center justify-center">
+                {qrCodeDataUrl ? (
+                  <img 
+                    src={qrCodeDataUrl} 
+                    alt="QR Code" 
+                    className="w-64 h-64"
+                  />
+                ) : (
+                  <div className="w-64 h-64 flex items-center justify-center text-gray-400">
+                    Gerando QR Code...
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Time Remaining */}

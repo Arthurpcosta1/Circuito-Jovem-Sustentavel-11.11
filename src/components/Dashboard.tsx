@@ -324,49 +324,6 @@ export function Dashboard({
             Ver Todos os Benefícios Disponíveis
           </Button>
         </div>
-
-        {/* Community Actions - Cards fluidos lado a lado */}
-        <div className="grid grid-cols-2 gap-3">
-          <Card
-            className="bg-gradient-to-br from-purple-500/20 to-purple-600/10 backdrop-blur-lg border-purple-300/30 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer group overflow-hidden"
-            onClick={() => {
-              const event = new CustomEvent('navigate', { detail: 'missions' });
-              window.dispatchEvent(event);
-            }}
-          >
-            <CardContent className="p-5">
-              <div className="text-center space-y-3">
-                <div className="w-14 h-14 bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto shadow-lg group-hover:scale-110 transition-transform">
-                  <Award className="w-7 h-7 text-white" />
-                </div>
-                <div>
-                  <p className="text-white font-semibold mb-1">Missões</p>
-                  <p className="text-xs text-purple-300">Ver conquistas</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card
-            className="bg-gradient-to-br from-cyan-500/20 to-cyan-600/10 backdrop-blur-lg border-cyan-300/30 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer group overflow-hidden"
-            onClick={() => {
-              const event = new CustomEvent('navigate', { detail: 'community' });
-              window.dispatchEvent(event);
-            }}
-          >
-            <CardContent className="p-5">
-              <div className="text-center space-y-3">
-                <div className="w-14 h-14 bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-2xl flex items-center justify-center mx-auto shadow-lg group-hover:scale-110 transition-transform">
-                  <MessageSquare className="w-7 h-7 text-white" />
-                </div>
-                <div>
-                  <p className="text-white font-semibold mb-1">Comunidade</p>
-                  <p className="text-xs text-cyan-300">Ver posts</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
       </div>
 
       {/* Admin Debug Tools */}
