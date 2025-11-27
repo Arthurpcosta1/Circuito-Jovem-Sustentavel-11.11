@@ -7,6 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { MapPin, Award, Gift, Key, User, Settings, MessageSquare, Sparkles, TrendingUp, Target } from 'lucide-react';
 import { auth, listarResgatesUsuario, listarColetasUsuario, buscarRanking } from '../utils/api';
 import { ConnectionTest } from './ConnectionTest';
+import { calcularNivel, chavesParaProximoNivel, calcularProgresso } from '../utils/levelSystem';
 
 interface DashboardProps {
   userName?: string;
@@ -64,12 +65,17 @@ export function Dashboard({
   };
 
   const displayName = userName || currentUser?.nome || "Arthur";
-  const displayLevel = currentLevel || (currentUser?.nivel ? `Nível ${currentUser.nivel}` : "Guardião Ambiental");
-  const displayKeys = impactKeys ?? currentUser?.chaves_impacto ?? 0;
-  const displayNextLevelKeys = nextLevelKeys || 75;
+  
+  // Calcular nível baseado nas chaves de impacto
+  const chavesAtuais = impactKeys ?? currentUser?.chaves_impacto ?? 0;
+  const nivelInfo = calcularNivel(chavesAtuais);
+  const displayLevel = currentLevel || `Nível ${nivelInfo.nivel} - ${nivelInfo.nome}`;
+  const displayKeys = chavesAtuais;
+  const chavesProxNivel = chavesParaProximoNivel(chavesAtuais);
+  const displayNextLevelKeys = chavesProxNivel ? chavesAtuais + chavesProxNivel : chavesAtuais;
   const displayAvatar = userAvatar || currentUser?.foto_url || null;
-  const progressPercentage = (displayKeys / displayNextLevelKeys) * 100;
-  const keysToNext = displayNextLevelKeys - displayKeys;
+  const progressPercentage = calcularProgresso(chavesAtuais);
+  const keysToNext = chavesProxNivel || 0;
 
   // Buscar recompensas reais do usuário
   const [recentRewards, setRecentRewards] = useState<any[]>([]);

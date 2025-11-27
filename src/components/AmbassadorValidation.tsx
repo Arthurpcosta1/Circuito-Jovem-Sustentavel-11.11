@@ -8,6 +8,9 @@ import { Badge } from './ui/badge';
 import { QrCode, Scan, Check, X, User, Scale, Package, Camera, AlertCircle, Shield } from 'lucide-react';
 import { validarTokenQRCode } from '../utils/api';
 import { toast } from 'sonner@2.0.3';
+import { auth } from '../utils/api';
+import { supabase } from '../utils/supabase';
+import { calcularNivel } from '../utils/levelSystem';
 
 interface CollectionData {
   userId: string;
@@ -312,35 +315,114 @@ export function AmbassadorValidation() {
   };
 
   const handleConfirmCollection = async () => {
+    if (!collectionData) {
+      toast.error('Dados da coleta não encontrados');
+      return;
+    }
+
     setIsProcessing(true);
     
     try {
-      console.log('🔵 Enviando coleta para validação...');
-      
-      // Fazer chamada real à API
-      const response = await fetch(`https://${import.meta.env.VITE_SUPABASE_PROJECT_ID || 'ieyqcvafbylfnzzjrvvd'}.supabase.co/functions/v1/make-server-7af4432d/coletas/validar`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('access_token') || ''}`
-        },
-        body: JSON.stringify({
-          usuario_id: collectionData?.userId,
-          estacao_id: 'estacao-default-recife', // TODO: Usar estação real do embaixador
-          peso_kg: parseFloat(weight),
-          material_tipo: materialType,
-          embaixador_id: null, // TODO: Usar ID real do embaixador
-          observacoes: `Validado via QR Code - ${new Date().toLocaleString('pt-BR')}`
-        })
+      console.log('🔵 Enviando coleta para validação...', {
+        usuario_id: collectionData.userId,
+        peso_kg: parseFloat(weight),
+        material_tipo: materialType,
+        chaves: collectionData.keysToAward
       });
-
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || 'Erro ao validar coleta');
+      
+      const currentUser = auth.getCurrentUser();
+      if (!currentUser?.id) {
+        throw new Error('Embaixador não autenticado');
       }
 
-      console.log('✅ Coleta validada:', data);
+      // Buscar dados do embaixador
+      const { data: embaixadorData } = await supabase
+        .from('embaixadores')
+        .select('id, estacao_id')
+        .eq('usuario_id', currentUser.id)
+        .single();
+
+      if (!embaixadorData) {
+        throw new Error('Dados do embaixador não encontrados');
+      }
+
+      // Registrar coleta no banco
+      const { data: coleta, error: coletaError } = await supabase
+        .from('coletas')
+        .insert({
+          usuario_id: collectionData.userId,
+          estacao_id: embaixadorData.estacao_id || 'estacao-default-recife',
+          peso_kg: parseFloat(weight),
+          material_tipo: materialType,
+          embaixador_id: embaixadorData.id,
+          status: 'validada',
+          chaves_concedidas: collectionData.keysToAward,
+          data_validacao: new Date().toISOString(),
+          observacoes: `Validado via QR Code - ${new Date().toLocaleString('pt-BR')}`
+        })
+        .select()
+        .single();
+
+      if (coletaError) {
+        console.error('Erro ao inserir coleta:', coletaError);
+        throw new Error('Erro ao registrar coleta no banco');
+      }
+
+      console.log('✅ Coleta registrada:', coleta);
+
+      // Atualizar chaves do usuário
+      const { data: usuarioAtual } = await supabase
+        .from('usuarios')
+        .select('chaves_impacto, nivel')
+        .eq('id', collectionData.userId)
+        .single();
+
+      const novasChaves = (usuarioAtual?.chaves_impacto || 0) + collectionData.keysToAward;
+      
+      // Calcular novo nível baseado nas chaves
+      const nivelInfo = calcularNivel(novasChaves);
+      const nivelAnterior = usuarioAtual?.nivel || 1;
+      const nivelAtual = nivelInfo.nivel;
+
+      const { error: updateError } = await supabase
+        .from('usuarios')
+        .update({ 
+          chaves_impacto: novasChaves,
+          nivel: nivelAtual,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', collectionData.userId);
+
+      if (updateError) {
+        console.error('Erro ao atualizar chaves:', updateError);
+        throw new Error('Erro ao conceder chaves ao usuário');
+      }
+
+      console.log('✅ Chaves atualizadas:', novasChaves);
+      console.log('✅ Nível atualizado:', nivelAtual, `(${nivelInfo.nome})`);
+
+      // Verificar se subiu de nível
+      if (nivelAtual > nivelAnterior) {
+        toast.success(`🎉 ${collectionData.userName} subiu para o nível ${nivelAtual} - ${nivelInfo.nome}!`, {
+          duration: 5000,
+        });
+      }
+
+      // Atualizar contador de coletas do embaixador
+      const { data: currentEmbaixador } = await supabase
+        .from('embaixadores')
+        .select('total_coletas_validadas')
+        .eq('id', embaixadorData.id)
+        .single();
+
+      await supabase
+        .from('embaixadores')
+        .update({ 
+          total_coletas_validadas: (currentEmbaixador?.total_coletas_validadas || 0) + 1
+        })
+        .eq('id', embaixadorData.id);
+
+      toast.success(`✅ ${collectionData.keysToAward} chaves enviadas para ${collectionData.userName}!`);
       
       setIsProcessing(false);
       setIsComplete(true);
@@ -355,6 +437,7 @@ export function AmbassadorValidation() {
       }, 3000);
     } catch (error) {
       console.error('❌ Erro ao confirmar coleta:', error);
+      toast.error(error instanceof Error ? error.message : 'Erro ao processar coleta');
       setIsProcessing(false);
       setCameraError(error instanceof Error ? error.message : 'Erro ao processar a coleta. Tente novamente.');
     }

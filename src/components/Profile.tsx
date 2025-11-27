@@ -43,6 +43,9 @@ import {
   ChevronRight
 } from 'lucide-react';
 
+import { supabase } from '../utils/supabase';
+import { calcularNivel, calcularProgresso, chavesParaProximoNivel } from '../utils/levelSystem';
+
 interface ProfileProps {
   onNavigateToAdmin?: (screen: string) => void;
 }
@@ -108,54 +111,65 @@ export function Profile({ onNavigateToAdmin }: ProfileProps) {
     loadUserData();
   };
 
+  // Calcular informações de nível
+  const chavesAtuais = currentUser?.chaves_impacto || 0;
+  const nivelInfo = calcularNivel(chavesAtuais);
+  const progresso = calcularProgresso(chavesAtuais);
+  const chavesRestantes = chavesParaProximoNivel(chavesAtuais);
+
   const userStats = {
     name: currentUser?.nome || 'Arthur Silva',
     email: currentUser?.email || 'arthur.silva@email.com',
-    level: currentUser?.nivel ? `Nível ${currentUser.nivel}` : 'Guardião Ambiental',
-    impactKeys: currentUser?.chaves_impacto || 47,
-    totalRecycling: 89,
-    rewardsClaimed: 7,
-    joinDate: 'Março 2024',
+    level: nivelInfo ? `Nível ${nivelInfo.nivel} - ${nivelInfo.nome}` : 'Nível 1 - Iniciante',
+    impactKeys: chavesAtuais,
+    totalRecycling: 0, // Será carregado do banco
+    rewardsClaimed: 0, // Será carregado do banco
+    joinDate: currentUser?.created_at ? new Date(currentUser.created_at).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }) : 'Março 2024',
     avatar: profilePhoto || currentUser?.foto_url || null,
     tipo: currentUser?.tipo || 'estudante'
   };
 
+  // Carregar dados reais de reciclagens e resgates
+  const [statsLoading, setStatsLoading] = useState(true);
 
+  useEffect(() => {
+    loadUserStats();
+  }, [currentUser]);
 
-  const achievements: Achievement[] = [
-    {
-      id: '1',
-      title: 'Primeiro Passo',
-      description: 'Primeira reciclagem registrada',
-      icon: <Leaf className="w-5 h-5" />,
-      earnedAt: 'Março 2024',
-      rarity: 'common'
-    },
-    {
-      id: '2',
-      title: 'Reciclador de Papel',
-      description: '50kg de papel reciclado',
-      icon: <Recycle className="w-5 h-5" />,
-      earnedAt: 'Abril 2024',
-      rarity: 'rare'
-    },
-    {
-      id: '3',
-      title: 'Embaixador Indicado',
-      description: 'Indicou 5 amigos para o Circuito',
-      icon: <Users className="w-5 h-5" />,
-      earnedAt: 'Maio 2024',
-      rarity: 'epic'
-    },
-    {
-      id: '4',
-      title: 'Meta Mensal',
-      description: 'Atingiu meta de reciclagem 3 meses seguidos',
-      icon: <Target className="w-5 h-5" />,
-      earnedAt: 'Junho 2024',
-      rarity: 'legendary'
+  const loadUserStats = async () => {
+    if (!currentUser?.id) {
+      setStatsLoading(false);
+      return;
     }
-  ];
+
+    try {
+      // Buscar coletas do usuário
+      const { data: coletas } = await supabase
+        .from('coletas')
+        .select('id')
+        .eq('usuario_id', currentUser.id);
+
+      // Buscar resgates do usuário
+      const { data: resgates } = await supabase
+        .from('resgates')
+        .select('id')
+        .eq('usuario_id', currentUser.id);
+
+      // Atualizar stats
+      userStats.totalRecycling = coletas?.length || 0;
+      userStats.rewardsClaimed = resgates?.length || 0;
+    } catch (error) {
+      console.error('Erro ao carregar stats:', error);
+    } finally {
+      setStatsLoading(false);
+    }
+  };
+
+
+
+  const achievements: Achievement[] = [];
+
+  // TODO: Buscar conquistas reais do banco de dados quando implementarmos o sistema de conquistas
 
   const getRarityColor = (rarity: Achievement['rarity']) => {
     switch (rarity) {
@@ -196,14 +210,14 @@ export function Profile({ onNavigateToAdmin }: ProfileProps) {
                   </div>
                   <div className="flex-1">
                     <h3 className="text-white font-bold text-base mb-0.5">Acesso Administrativo</h3>
-                    <p className="text-white/90 text-sm">Painel de Embaixador</p>
+                    <p className="text-white/90 text-sm">Validação de Coletas</p>
                   </div>
                   <Button 
-                    onClick={() => onNavigateToAdmin?.('ambassador-dashboard')}
+                    onClick={() => onNavigateToAdmin?.('ambassador-validation')}
                     className="bg-white/20 backdrop-blur text-white hover:bg-white/30 font-semibold shadow-lg border border-white/30 rounded-xl px-4"
                     size="sm"
                   >
-                    Abrir
+                    Validar
                     <ChevronRight className="w-4 h-4 ml-1" />
                   </Button>
                 </div>
@@ -336,80 +350,27 @@ export function Profile({ onNavigateToAdmin }: ProfileProps) {
                 <Card key={achievement.id} className="bg-white/5 border-purple-300/20">
                   <CardContent className="p-3">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-purple-500/20 rounded-full flex items-center justify-center flex-shrink-0 text-purple-300">
-                        {achievement.icon}
+                      <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-600 to-cyan-600 flex items-center justify-center flex-shrink-0">
+                        <span className="text-base">{achievement.icon}</span>
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm text-white">{achievement.title}</p>
-                        <p className="text-xs text-purple-300">{achievement.earnedAt}</p>
+                        <p className="text-white text-sm truncate">{achievement.title}</p>
+                        <p className="text-purple-300 text-xs truncate">{achievement.description}</p>
                       </div>
                     </div>
                   </CardContent>
                 </Card>
               ))}
+              
+              {achievements.length === 0 && (
+                <div className="text-center py-6">
+                  <p className="text-purple-300 text-sm">🎯 Nenhuma conquista ainda</p>
+                  <p className="text-purple-400 text-xs mt-1">Complete missões para ganhar conquistas!</p>
+                </div>
+              )}
             </div>
-            
-            <Button variant="outline" className="w-full mt-3 border-purple-300/30 text-purple-200 hover:bg-purple-600/20" size="sm">
-              Ver Todas ({achievements.length})
-            </Button>
           </CardContent>
         </Card>
-
-        {/* Admin Access Section - Only for Embaixador and Commerce */}
-        {(userStats.tipo === 'embaixador' || userStats.tipo === 'comercio') && (
-          <Card className="bg-gradient-to-br from-orange-600/20 to-yellow-600/20 backdrop-blur-lg border-orange-400/30">
-            <CardContent className="p-5">
-              <div className="flex items-center gap-2 mb-4">
-                <Shield className="w-5 h-5 text-orange-400" />
-                <h3 className="text-white text-sm">Acesso Administrativo</h3>
-              </div>
-              
-              <div className="space-y-2">
-                {userStats.tipo === 'embaixador' && (
-                  <>
-                    <Button
-                      variant="outline"
-                      className="w-full justify-between border-orange-300/30 text-white hover:bg-orange-600/20"
-                      onClick={() => onNavigateToAdmin?.('ambassador-dashboard')}
-                    >
-                      <div className="flex items-center gap-2">
-                        <Award className="w-4 h-4 text-orange-400" />
-                        <span>Painel Embaixador</span>
-                      </div>
-                      <ChevronRight className="w-4 h-4" />
-                    </Button>
-                    
-                    <Button
-                      variant="outline"
-                      className="w-full justify-between border-orange-300/30 text-white hover:bg-orange-600/20"
-                      onClick={() => onNavigateToAdmin?.('ambassador-validation')}
-                    >
-                      <div className="flex items-center gap-2">
-                        <QrCode className="w-4 h-4 text-orange-400" />
-                        <span>Validar Coletas</span>
-                      </div>
-                      <ChevronRight className="w-4 h-4" />
-                    </Button>
-                  </>
-                )}
-                
-                {userStats.tipo === 'comercio' && (
-                  <Button
-                    variant="outline"
-                    className="w-full justify-between border-orange-300/30 text-white hover:bg-orange-600/20"
-                    onClick={() => onNavigateToAdmin?.('commerce-validator')}
-                  >
-                    <div className="flex items-center gap-2">
-                      <Store className="w-4 h-4 text-orange-400" />
-                      <span>Validar Resgates</span>
-                    </div>
-                    <ChevronRight className="w-4 h-4" />
-                  </Button>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        )}
 
         {/* Account Info */}
         <Card className="bg-white/10 backdrop-blur-lg border-purple-300/20">
@@ -431,7 +392,7 @@ export function Profile({ onNavigateToAdmin }: ProfileProps) {
               </div>
               <div className="flex justify-between">
                 <span className="text-purple-200">Próximo nível em</span>
-                <span className="text-cyan-400">28 chaves</span>
+                <span className="text-cyan-400">{chavesRestantes} chaves</span>
               </div>
             </div>
           </CardContent>
