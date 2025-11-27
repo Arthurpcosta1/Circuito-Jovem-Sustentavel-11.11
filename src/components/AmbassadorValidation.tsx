@@ -94,10 +94,21 @@ export function AmbassadorValidation() {
           playPromise
             .then(() => {
               console.log('✅ Câmera iniciada com sucesso');
-              // Começar a escanear após o vídeo estar pronto
-              videoRef.current!.onloadedmetadata = () => {
-                startScanning();
-              };
+              
+              // Aguardar o vídeo estar pronto antes de começar a escanear
+              if (videoRef.current) {
+                // Se já tem metadata, começar imediatamente
+                if (videoRef.current.readyState >= 2) {
+                  console.log('📹 Vídeo pronto, iniciando scan...');
+                  startScanning();
+                } else {
+                  // Senão, aguardar metadata
+                  videoRef.current.onloadedmetadata = () => {
+                    console.log('📹 Metadata carregada, iniciando scan...');
+                    startScanning();
+                  };
+                }
+              }
             })
             .catch((error) => {
               console.error('Erro ao reproduzir vídeo:', error);
@@ -167,32 +178,63 @@ export function AmbassadorValidation() {
 
   const scanQRCode = () => {
     const jsQR = (window as any).jsQR;
-    if (!jsQR || !videoRef.current || !canvasRef.current) return;
+    if (!jsQR || !videoRef.current || !canvasRef.current) {
+      console.error('❌ Scan bloqueado:', {
+        jsQR: !!jsQR,
+        video: !!videoRef.current,
+        canvas: !!canvasRef.current
+      });
+      return;
+    }
 
     const video = videoRef.current;
     const canvas = canvasRef.current;
     const context = canvas.getContext('2d');
     
-    if (!context) return;
+    if (!context) {
+      console.error('❌ Context 2D não encontrado');
+      return;
+    }
+
+    console.log('🔍 Iniciando loop de scan...');
+    let scanCount = 0;
 
     // Configurar tamanho do canvas
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
+    
+    console.log('📐 Canvas configurado:', canvas.width, 'x', canvas.height);
 
-    // Tentar escanear QR code a cada 300ms
+    // Tentar escanear QR code a cada 100ms (mais rápido para melhor detecção)
     scanIntervalRef.current = window.setInterval(() => {
       if (video.readyState === video.HAVE_ENOUGH_DATA) {
-        context.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-        const code = jsQR(imageData.data, imageData.width, imageData.height);
+        try {
+          context.drawImage(video, 0, 0, canvas.width, canvas.height);
+          const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+          const code = jsQR(imageData.data, imageData.width, imageData.height, {
+            inversionAttempts: 'dontInvert'
+          });
 
-        if (code) {
-          // QR Code encontrado!
-          handleQRCodeDetected(code.data);
-          stopCamera();
+          scanCount++;
+          
+          // Log a cada 10 scans
+          if (scanCount % 10 === 0) {
+            console.log(`🔄 Scan ${scanCount}: ${code ? '✅ QR ENCONTRADO!' : '❌ Nada detectado'}`);
+          }
+
+          if (code) {
+            console.log('🎯 QR CODE DETECTADO!', code.data);
+            // QR Code encontrado!
+            handleQRCodeDetected(code.data);
+            stopCamera();
+          }
+        } catch (error) {
+          console.error('❌ Erro no loop de scan:', error);
         }
+      } else {
+        console.warn('⚠️ Vídeo não está pronto:', video.readyState);
       }
-    }, 300);
+    }, 100); // Mudado de 300ms para 100ms para scannear mais rápido
   };
 
   const handleQRCodeDetected = async (qrData: string) => {
